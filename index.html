@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instinct Tracker</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg:#0d0d0f;--surface:#141416;--surface2:#1c1c1f;--surface3:#222226;
+    --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
+    --text:#e4e0d8;--muted:#6a6660;--muted2:#4a4a52;
+    --font:'Georgia','Times New Roman',serif;--mono:'Courier New',monospace;
+    --giga:#4a8fd4;--giga-dim:#1e3a54;--giga-bg:#0e1e2e;
+    --utah:#5a9e4f;--utah-dim:#1e3c1a;--utah-bg:#0e1e0c;
+    --carn:#c98a2a;--carn-dim:#4a3010;--carn-bg:#1e140a;
+    --wyv:#a054c0;--wyv-dim:#3a1e50;--wyv-bg:#160e20;
+    --pen:#c05050;--pen-dim:#501818;--pen-bg:#1a0e0e;
+    --online:#5a9e4f;--offline:#c05050;--connecting:#c98a2a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;padding:1.5rem;max-width:960px;margin:0 auto;}
+
+  .page-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border2);}
+  .page-title{font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);font-family:var(--mono);margin-bottom:4px;}
+  .page-name{font-size:24px;font-weight:normal;}
+  .reset-all{font-size:11px;font-family:var(--mono);color:var(--muted);background:none;border:0.5px solid var(--border2);border-radius:6px;padding:5px 12px;cursor:pointer;transition:color 0.2s;white-space:nowrap;}
+  .reset-all:hover{color:var(--text);}
+
+  .conn-bar{display:flex;align-items:center;gap:9px;margin-bottom:14px;padding:8px 14px;background:var(--surface);border:0.5px solid var(--border);border-radius:10px;}
+  .conn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:background 0.5s;}
+  .conn-label{font-size:11px;font-family:var(--mono);color:var(--muted);}
+  .conn-label b{font-weight:normal;color:#c8c4bc;}
+  @keyframes cpulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+
+  .rules-section{background:var(--surface);border:0.5px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden;}
+  .rules-toggle{width:100%;background:none;border:none;cursor:pointer;padding:0.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center;color:var(--text);font-family:var(--font);font-size:14px;transition:background 0.15s;text-align:left;}
+  .rules-toggle:hover{background:var(--surface2);}
+  .rules-toggle-inner{display:flex;align-items:center;gap:10px;}
+  .rules-tag{font-size:9px;font-family:var(--mono);letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);}
+  .rules-arrow{font-size:11px;font-family:var(--mono);color:var(--muted);transition:transform 0.2s;display:inline-block;}
+  .rules-toggle.open .rules-arrow{transform:rotate(180deg);}
+  .rules-body{display:none;padding:0 1.1rem 1.1rem;border-top:0.5px solid var(--border);}
+  .rules-body.open{display:block;}
+  .rules-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1rem;}
+  @media(max-width:600px){.rules-grid{grid-template-columns:1fr;}}
+  .rules-block{background:var(--surface2);border-radius:10px;padding:0.85rem;}
+  .rules-block-title{font-size:9px;font-family:var(--mono);letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .rules-text{font-size:12px;line-height:1.75;color:#c8c4bc;}
+  .rules-text p{margin-bottom:7px;}
+  .rules-text p:last-child{margin-bottom:0;}
+  .rules-text em{color:var(--text);font-style:italic;}
+  .rules-table{font-size:11px;font-family:var(--mono);line-height:2.1;color:#c8c4bc;}
+  .rules-divider{border:none;border-top:0.5px solid var(--border);margin:1rem 0 0;}
+  .rules-note{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:0.85rem;line-height:1.65;}
+  .rules-note span{color:#c8c4bc;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  @media(max-width:560px){.grid{grid-template-columns:1fr;}body{padding:1rem;}}
+
+  .card{background:var(--surface);border:0.5px solid var(--border);border-radius:14px;overflow:hidden;}
+  .card-stripe{height:2.5px;width:100%;}
+  .card[data-key="giga"] .card-stripe{background:var(--giga);}
+  .card[data-key="utah"] .card-stripe{background:var(--utah);}
+  .card[data-key="carn"] .card-stripe{background:var(--carn);}
+  .card[data-key="wyv"]  .card-stripe{background:var(--wyv);}
+  .card-body{padding:1rem 1.1rem 1.1rem;}
+  .card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.9rem;}
+  .creature-name{font-size:15px;letter-spacing:0.02em;}
+  .class-tag{font-size:10px;font-family:var(--mono);letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-top:3px;}
+  .score-pill{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:99px;border:0.5px solid var(--border2);color:var(--muted);white-space:nowrap;}
+  .score-row{display:flex;align-items:flex-end;gap:4px;margin-bottom:10px;}
+  .score-big{font-size:50px;line-height:1;font-weight:normal;transition:color 0.3s;min-width:52px;}
+  .score-of{font-size:16px;color:var(--muted);margin-bottom:5px;}
+  .btns{display:flex;flex-direction:column;gap:5px;margin-left:auto;align-self:center;}
+  .btn{width:34px;height:34px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:8px;color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--mono);transition:background 0.15s,transform 0.1s;line-height:1;}
+  .btn:hover{background:var(--surface3);}
+  .btn:active{transform:scale(0.92);}
+  .btn:disabled{opacity:0.2;cursor:not-allowed;transform:none;}
+  .pips{display:flex;gap:4px;margin-bottom:7px;}
+  .pip{flex:1;height:3px;border-radius:99px;background:var(--border2);transition:background 0.25s;}
+  .level-label{font-size:10px;font-family:var(--mono);letter-spacing:0.06em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;transition:color 0.3s;}
+
+  .features-box{background:var(--surface2);border-radius:10px;padding:0.75rem 0.85rem;margin-bottom:8px;}
+  .features-box-title{font-size:9px;font-family:var(--mono);letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .section-label{font-size:9px;font-family:var(--mono);letter-spacing:0.1em;text-transform:uppercase;color:var(--muted2);margin:9px 0 5px;}
+  .feature-item{display:flex;gap:8px;margin-bottom:7px;font-size:12px;line-height:1.5;}
+  .feature-item:last-child{margin-bottom:0;}
+  .feature-item.dimmed{opacity:0.38;}
+  .feature-dot{width:5px;height:5px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+  .feature-type{font-size:9px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
+  .feature-desc{color:#c8c4bc;font-size:12px;}
+  .feature-item.dimmed .feature-desc{color:#888480;}
+  .hr-thin{border:none;border-top:0.5px solid var(--border);margin:8px 0;}
+
+  .expand-toggle{font-size:11px;font-family:var(--mono);color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 0;letter-spacing:0.05em;transition:color 0.2s;display:block;width:100%;text-align:left;}
+  .expand-toggle:hover{color:var(--text);}
+  .expand-panel{display:none;margin-top:8px;border-top:0.5px solid var(--border);padding-top:10px;}
+  .expand-panel.open{display:block;}
+  .level-row{margin-bottom:10px;padding-bottom:10px;border-bottom:0.5px solid var(--border);}
+  .level-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+  .level-row-hd{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+  .level-num{font-family:var(--mono);font-size:10px;color:var(--muted2);min-width:16px;}
+  .level-name-lbl{font-size:11px;color:var(--muted);font-family:var(--mono);}
+  .level-detail{font-size:11px;line-height:1.65;padding-left:24px;}
+  .ld-passive{color:#888480;}
+  .level-row.cur .level-num{font-weight:bold;}
+  .level-row.cur .level-name-lbl{color:var(--text);}
+  .level-row.cur .ld-passive{color:#c8c4bc;}
+
+  .wyv-combat-section{background:var(--surface);border:0.5px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden;}
+  .wyv-combat-toggle{width:100%;background:none;border:none;cursor:pointer;padding:0.85rem 1.1rem;display:flex;justify-content:space-between;align-items:center;color:var(--text);font-family:var(--font);font-size:13px;transition:background 0.15s;text-align:left;}
+  .wyv-combat-toggle:hover{background:var(--surface2);}
+  .wyv-combat-toggle-inner{display:flex;align-items:center;gap:10px;}
+  .wyv-combat-tag{font-size:9px;font-family:var(--mono);letter-spacing:0.14em;text-transform:uppercase;color:var(--wyv);}
+  .wyv-combat-arrow{font-size:11px;font-family:var(--mono);color:var(--muted);transition:transform 0.2s;display:inline-block;}
+  .wyv-combat-toggle.open .wyv-combat-arrow{transform:rotate(180deg);}
+  .wyv-combat-body{display:none;padding:0 1.1rem 1.1rem;border-top:0.5px solid var(--border);}
+  .wyv-combat-body.open{display:block;}
+  .wyv-combat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1rem;}
+  @media(max-width:560px){.wyv-combat-grid{grid-template-columns:1fr;}}
+  .wyv-combat-block{background:var(--wyv-bg);border:0.5px solid var(--wyv-dim);border-radius:10px;padding:0.85rem;}
+  .wyv-combat-block-title{font-size:10px;font-family:var(--mono);letter-spacing:0.12em;text-transform:uppercase;color:var(--wyv);margin-bottom:10px;}
+  .wyv-stat-row{display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.5;align-items:flex-start;}
+  .wyv-stat-row:last-child{margin-bottom:0;}
+  .wyv-stat-label{font-size:9px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.1em;color:var(--wyv);min-width:68px;padding-top:2px;flex-shrink:0;}
+  .wyv-stat-val{color:#c8c4bc;font-size:12px;}
+  .wyv-stat-note{color:var(--muted);font-size:11px;font-style:italic;margin-top:6px;line-height:1.5;}
+  .wyv-combat-divider{border:none;border-top:0.5px solid var(--wyv-dim);margin:10px 0;}
+
+  .pack-section{background:var(--surface);border:0.5px solid var(--border);border-radius:14px;padding:1.1rem;margin-bottom:14px;}
+  .pack-title{font-size:10px;font-family:var(--mono);letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .pack-bonus{display:flex;gap:10px;padding:9px 11px;border-radius:9px;background:var(--surface2);margin-bottom:8px;border:0.5px solid transparent;transition:border-color 0.3s,background 0.3s;}
+  .pack-bonus:last-child{margin-bottom:0;}
+  .pack-bonus.active{border-color:var(--border2);background:var(--surface3);}
+  .pack-chips{display:flex;flex-direction:column;gap:3px;min-width:64px;padding-top:1px;}
+  .chip{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-family:var(--mono);border:0.5px solid;}
+  .chip.giga{background:var(--giga-bg);color:var(--giga);border-color:var(--giga-dim);}
+  .chip.utah{background:var(--utah-bg);color:var(--utah);border-color:var(--utah-dim);}
+  .chip.carn{background:var(--carn-bg);color:var(--carn);border-color:var(--carn-dim);}
+  .chip.wyv {background:var(--wyv-bg); color:var(--wyv); border-color:var(--wyv-dim);}
+  .chip.all {background:var(--surface3);color:var(--text);border-color:var(--border2);}
+  .pack-info{flex:1;}
+  .pack-condition{font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:4px;}
+  .pack-effect{font-size:12px;color:#888480;line-height:1.5;}
+  .pack-bonus.active .pack-effect{color:#c8c4bc;}
+  .active-badge{font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:var(--surface3);color:var(--muted2);text-transform:uppercase;letter-spacing:0.08em;display:none;align-self:flex-start;margin-top:1px;white-space:nowrap;border:0.5px solid var(--border2);}
+  .pack-bonus.active .active-badge{display:block;color:var(--text);}
+
+  .log-section{background:var(--surface);border:0.5px solid var(--border);border-radius:14px;padding:1.1rem;margin-bottom:14px;}
+  .log-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .log-title{font-size:10px;font-family:var(--mono);letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);}
+  .clear-btn{font-size:11px;font-family:var(--mono);color:var(--muted);background:none;border:none;cursor:pointer;transition:color 0.2s;}
+  .clear-btn:hover{color:var(--text);}
+  .log-entries{max-height:130px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent;}
+  .log-entry{font-size:11px;font-family:var(--mono);color:var(--muted);line-height:2;border-bottom:0.5px solid var(--border);display:flex;gap:10px;}
+  .log-entry:last-child{border-bottom:none;}
+  .log-time{color:var(--muted2);min-width:42px;}
+  .log-name{min-width:100px;}
+  .log-change{color:#c8c4bc;}
+  .empty-log{font-size:11px;font-family:var(--mono);color:var(--muted2);font-style:italic;}
+
+  .footer{display:flex;justify-content:flex-end;align-items:center;gap:10px;}
+  .save-dot{width:6px;height:6px;border-radius:50%;background:var(--utah);opacity:0;transition:opacity 0.4s;}
+  .save-dot.show{opacity:1;}
+  .footer-label{font-size:11px;font-family:var(--mono);color:var(--muted2);}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div>
+    <p class="page-title">D&amp;D Session Tool</p>
+    <h1 class="page-name">Instinct Tracker</h1>
+  </div>
+  <button class="reset-all" onclick="resetAll()">Reset all scores</button>
+</div>
+
+<div class="conn-bar">
+  <div class="conn-dot" id="conn-dot"></div>
+  <span class="conn-label" id="conn-label">Connecting to sync...</span>
+</div>
+
+<div class="rules-section">
+  <button class="rules-toggle" id="rules-toggle" onclick="toggleRules()">
+    <span class="rules-toggle-inner">
+      <span class="rules-tag">System Reference</span>
+      <span>How the Instinct System Works</span>
+    </span>
+    <span class="rules-arrow" id="rules-arrow">&#9660;</span>
+  </button>
+  <div class="rules-body" id="rules-body">
+    <div class="rules-grid">
+      <div class="rules-block">
+        <div class="rules-block-title">What Instinct Is</div>
+        <div class="rules-text">
+          <p>Each character has an Instinct Score from 0 to 5. It represents how deeply their animal nature has surfaced — 0 is full human control, 5 is the body operating at peak biological efficiency.</p>
+          <p>Every level unlocks a <em>passive ability</em> that is always active, an <em>active ability</em> always available at that level, and a <em>penalty</em> tied to the creature's specific biology. All passives from lower levels are retained as the score rises. Only the current level's active applies.</p>
+        </div>
+      </div>
+      <div class="rules-block">
+        <div class="rules-block-title">Raising the Score</div>
+        <div class="rules-text">
+          <p>The DM delivers instinct suggestions during play — sensory cues, bodily pulls, the creature's biological logic intruding on the player's mind. <em>Acting on a suggestion raises the score by 1.</em></p>
+          <p>Players may also raise their own score by voluntarily choosing the animal's logic over the tactically smarter human choice, unprompted. The DM decides if the moment qualifies.</p>
+        </div>
+      </div>
+      <div class="rules-block">
+        <div class="rules-block-title">Resisting &amp; Lowering</div>
+        <div class="rules-text">
+          <p>A player may resist any instinct suggestion. Resisting requires a <em>Wisdom saving throw: DC 10 + current instinct level.</em></p>
+          <p>To actively lower their score, a player must successfully resist a number of suggestions equal to their current level. Level 1 requires 1 resist. Level 4 requires 4. Each success counts toward the total until the score drops by 1, then the counter resets.</p>
+        </div>
+      </div>
+      <div class="rules-block">
+        <div class="rules-block-title">DC &amp; Resistance Reference</div>
+        <div class="rules-table">
+          Level 0 — no saves needed<br>
+          Level 1 — DC 11 &nbsp;&#8901;&nbsp; resist 1x to lower<br>
+          Level 2 — DC 12 &nbsp;&#8901;&nbsp; resist 2x to lower<br>
+          Level 3 — DC 13 &nbsp;&#8901;&nbsp; resist 3x to lower<br>
+          Level 4 — DC 14 &nbsp;&#8901;&nbsp; resist 4x to lower<br>
+          Level 5 — DC 15 &nbsp;&#8901;&nbsp; resist 5x to lower
+        </div>
+      </div>
+    </div>
+    <hr class="rules-divider">
+    <p class="rules-note"><span>Design note —</span> The DM is the primary voice of each creature's instincts. Suggestions come from the body speaking to the mind. Player-triggered raises represent the mind choosing to listen before being asked.</p>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="wyv-combat-section">
+  <button class="wyv-combat-toggle" id="wyv-combat-toggle" onclick="toggleWyvCombat()">
+    <span class="wyv-combat-toggle-inner">
+      <span class="wyv-combat-tag">Wyvern</span>
+      <span>Combat Abilities — Always Available</span>
+    </span>
+    <span class="wyv-combat-arrow" id="wyv-combat-arrow">&#9660;</span>
+  </button>
+  <div class="wyv-combat-body" id="wyv-combat-body">
+    <div class="wyv-combat-grid">
+      <div class="wyv-combat-block">
+        <div class="wyv-combat-block-title">&#9654; Ranged Breath Strike</div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">range</span><span class="wyv-stat-val">120ft</span></div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">to hit</span><span class="wyv-stat-val">Guaranteed — no attack roll needed</span></div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">damage</span><span class="wyv-stat-val">1d6 + 2</span></div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">limit</span><span class="wyv-stat-val">Once per turn. Cannot target creatures within 10ft of an ally.</span></div>
+        <div class="wyv-combat-divider"></div>
+        <div class="wyv-stat-note">Long-range artillery option. Low damage — designed to finish off low health targets at distance. Does not consume the main breath weapon resource.</div>
+      </div>
+      <div class="wyv-combat-block">
+        <div class="wyv-combat-block-title">&#8659; Dive Attack</div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">requirement</span><span class="wyv-stat-val">Airborne, descend at least 20ft toward target this turn</span></div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">speed</span><span class="wyv-stat-val">Movement speed doubles for the turn of the dive</span></div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">attack</span><span class="wyv-stat-val">Advantage on all attacks made during the dive</span></div>
+        <div class="wyv-stat-row"><span class="wyv-stat-label">ac penalty</span><span class="wyv-stat-val">-2 AC until start of your next turn</span></div>
+        <div class="wyv-combat-divider"></div>
+        <div class="wyv-stat-note">Hit harder and close distance fast — but exposed on the dive. Stacks with instinct level bonuses at level 2 and above.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pack-section">
+  <p class="pack-title">Pack synergies</p>
+  <div id="pack-bonuses"></div>
+</div>
+
+<div class="log-section">
+  <div class="log-header">
+    <span class="log-title">Event log</span>
+    <button class="clear-btn" onclick="clearLog()">clear</button>
+  </div>
+  <div class="log-entries" id="log"><p class="empty-log">No changes yet.</p></div>
+</div>
+
+<div class="footer">
+  <div class="save-dot" id="save-dot"></div>
+  <span class="footer-label">synced</span>
+</div>
+
+<script>
+// ── FIREBASE INIT ──────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyCTo9vq8s-qdVjLcTwcDmINtPrLCA1DpJE",
+  authDomain: "instinct-tracker-dnd-database.firebaseapp.com",
+  databaseURL: "https://instinct-tracker-dnd-database-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "instinct-tracker-dnd-database",
+  storageBucket: "instinct-tracker-dnd-database.firebasestorage.app",
+  messagingSenderId: "296962998883",
+  appId: "1:296962998883:web:f364ec32279332421f6e56"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const scoresRef = db.ref('scores');
+const logRef    = db.ref('log');
+
+// ── CONNECTION STATUS ──────────────────────────────────────────
+const connectedRef = db.ref('.info/connected');
+connectedRef.on('value', snap => {
+  const dot   = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-label');
+  if (snap.val()) {
+    dot.style.background   = 'var(--online)';
+    dot.style.animation    = 'none';
+    label.innerHTML        = '<b>Live sync active</b> — all screens update instantly';
+  } else {
+    dot.style.background   = 'var(--connecting)';
+    dot.style.animation    = 'cpulse 1.2s infinite';
+    label.innerHTML        = 'Reconnecting...';
+  }
+});
+
+// ── DATA ───────────────────────────────────────────────────────
+const DATA = {
+  giga:{
+    name:'Giganotosaurus',cls:'Paladin',color:'var(--giga)',
+    levelLabel:['human mind dominant','presence awakening','defensive instincts','dominance unlocked','apex control','full predator mode'],
+    levels:[
+      {passive:'Full conscious control. No creature instincts active. Humanoid tactics expressed through a massive body.',active:null,penalty:'Fine motor tasks — writing, lockpicking, anything requiring hands — are simply impossible. The body does not have the equipment.'},
+      {passive:'When you did not move this turn and make an attack, +1 to that attack roll. Weight planted, full force behind every strike.',active:'Advantage on all Intimidation checks.',penalty:'Spaces smaller than roughly 20x20ft cause low biological unease. Disadvantage on Concentration checks while inside enclosed structures.'},
+      {passive:'+1 AC at all times. The body has begun making small automatic adjustments to incoming threats.',active:'When standing ground with no movement this turn, gain an additional +2 AC on top of the passive bonus.',penalty:'When forced to retreat by any external effect, Wis save DC 10 or use your reaction to immediately turn back toward the threat, potentially provoking opportunity attacks.'},
+      {passive:'Move through enemy spaces freely — they are not difficult terrain and creatures cannot stop your movement by occupying space.',active:'Enemies within 10ft must make Wis save DC 13 at the start of their turn or be frightened until end of their next turn.',penalty:'Being attacked without being able to retaliate — restrained, held, forced to Dodge — requires Wis save DC 12 or you spend your reaction making an opportunity attack against the nearest creature regardless of trigger.'},
+      {passive:'Creatures starting their turn within 15ft must make Wis save DC 13 or take -1 to attack rolls until they leave the radius. You simply have to be there.',active:'Frightful Presence in a 30ft radius (Wis DC 14). Advantage on all your attack rolls this turn.',penalty:'Creatures two or more size categories smaller than you that have not yet dealt damage to you this combat trigger dismissive instinct. Disadvantage on attacks against them until they hurt you first.'},
+      {passive:'All attacks deal +1d6 additional damage. Every movement is economy and finality.',active:'All attacks this turn have advantage. Crit range 19-20. Every creature you damage is automatically frightened until end of their next turn.',penalty:'Walking away from unresolved combat requires Wis save DC 14 or spend at least one more action engaging first. If Ceratosaurus is also at instinct 3+, disadvantage on attacks made specifically to protect the Ceratosaurus — the body hesitates for a fraction of a second it has no conscious reason for.'}
+    ]
+  },
+  utah:{
+    name:'Utahraptor',cls:'Ranger',color:'var(--utah)',
+    levelLabel:['human mind dominant','senses sharpening','paths clarifying','hunt instinct active','apex mobility','perfect hunt logic'],
+    levels:[
+      {passive:'Full tactical control remapped to raptor physiology. Every movement must be consciously thought through.',active:null,penalty:"No hands means no ranged weapons as previously used. Any action requiring manual dexterity must be improvised at the DM's discretion."},
+      {passive:'Detect creatures within 30ft by scent and ground vibration even through total cover or invisibility. You know something is there. You cannot see it, but you know.',active:'Advantage on all Perception and Tracking checks.',penalty:'Sudden loud noises — thunder, explosions, sonic spells — require Con save DC 11 or be disoriented until end of next turn, with disadvantage on all rolls. The sensory system is calibrated for subtlety. Loud inputs overwhelm it.'},
+      {passive:'When any creature within 60ft moves, you may use your reaction to move up to 15ft toward their new position without provoking opportunity attacks. The body tracks movement automatically.',active:'Advantage on attacks against any target that moved this turn.',penalty:'Stillness accumulates. If you end your turn in the exact position you started it without having attacked, gain one Restlessness stack (max 3). Each stack is -1 to attack rolls. All stacks reset the moment you move or attack.'},
+      {passive:'Targets with no allies within 30ft of them take +1d6 damage from your attacks. Isolation is the kill condition. The body knows it.',active:"Hunter's Mark applies permanently to your chosen target — no spell slot required. You may reassign it once per round as a free action.",penalty:'When your marked prey moves away and you cannot follow that same turn, Wis save DC 12 or your entire movement next turn must be spent pursuing that target regardless of tactical considerations.'},
+      {passive:'Ignore difficult terrain permanently. +10ft to movement speed.',active:'Once per turn you may double your movement speed and gain advantage on attacks against isolated targets.',penalty:'Disadvantage on all attacks if you have not moved at least 15ft this turn. The body needs momentum. A stationary raptor is a compromised raptor.'},
+      {passive:'At the start of initiative, automatically identify the most vulnerable creature in the encounter — the DM tells you who. All attacks against that creature are at permanent advantage.',active:'Any attack against a target below half HP is an automatic critical hit on a successful roll.',penalty:'Choosing to attack a creature other than the identified weakest target requires Wis save DC 13 or suffer disadvantage on that attack. The body knows the correct order of operations and resents being overruled.'}
+    ]
+  },
+  carn:{
+    name:'Ceratosaurus',cls:'Druid',color:'var(--carn)',
+    levelLabel:['human mind dominant','ecology awakening','terrain adapting','territory marked','ecosystem shaping','perfect integration'],
+    levels:[
+      {passive:'Full conscious control. The horn is present and inert — but not entirely silent. Within 60ft of any magical source the horn hums faintly, telling you magic is present before you have consciously looked for it. You cannot identify it. You simply know it is there.',active:null,penalty:'Standard new-body limitations. If the Giganotosaurus is at instinct 2 or higher, faint unease persists within 20ft of it — disadvantage on Concentration checks when in close proximity. The horn registers the larger predator nearby. The mind overrules it easily at this stage.'},
+      {passive:'Passive Detect Magic in a 30ft radius at all times — no concentration, no action. You know when magic is present and roughly where. You also sense the emotional quality of any magic you detect — whether it feels corrupted, natural, violent, ancient. Not specifics. Just the texture of it.',active:'Advantage on all Nature and Survival checks. Once per short rest, the horn emits a life pulse — revealing the location of all living creatures within 30ft regardless of cover or invisibility for one round. You do not see them. You simply know exactly where they are.',penalty:'Ecologically dead environments — wasteland, ruin, nuclear scarring — cause a persistent horn ache. -1 to horn-based checks only: Nature, Survival, Perception, and spell save DC. All other rolls are unaffected.'},
+      {passive:'Within 60ft of a natural water source gain +2 to all saving throws and regenerate 1d4 HP at the start of each of your turns. The semi-aquatic nervous system actively heals in its preferred environment.',active:'Ignore difficult terrain. Advantage on Dex saves in natural environments. Charge attack now deals 2d8 + Str modifier damage and knocks the target back 10ft on a hit. The horn is a weapon now, not just a sensory organ.',penalty:'For every two hours spent away from natural water, take -1 to all Wisdom-based checks. Stacks to a maximum of -2. Resets completely within one minute of reaching water.'},
+      {passive:'In any area occupied for 10 or more minutes this session, gain +2 to all attack rolls and advantage on all saving throws. The body fights better in claimed ground. The ground fights back for you.',active:'Horn Resonance Pulse once per combat as a bonus action — a 20ft radius wave of ecological energy. All concentration spells within 20ft require an immediate DC 13 check. Non-concentration magical effects are suppressed for one round. Difficult terrain radius expands to 15ft. Charge attack automatically knocks prone on a hit — no save.',penalty:'When the Giganotosaurus is at instinct 3 or higher within 30ft, the body wants to maintain distance rather than close it. You can move, fight, cast, and act freely in any direction. If you end your turn more than 15ft away from the Giga, gain +1 to all rolls until start of your next turn — the biology rewards the distance it prefers.'},
+      {passive:'In natural environments, at the start of each of your turns in combat regain one expended spell slot of the lowest available level. Additionally in any environment, you may expend a spell slot as a bonus action to charge the horn — for a number of rounds equal to the slot level, your charge attacks deal an additional 1d8 per slot level of force damage on impact.',active:'All three terrain effects available each turn — Entangle 20ft radius, Obscure 15ft radius, and charge knock-prone (Str DC 14) — each requiring a bonus action to activate. Once per long rest, cast Erupting Earth, Plant Growth, or Sleet Storm without expending a spell slot. The ecology offers something back.',penalty:'In completely artificial or dead environments, the spell slot regain passive does not function and spell save DC is reduced by 1. All other passives remain.'},
+      {passive:'Cannot be surprised in natural environments. Tremorsense 30ft. Blindsight 15ft specifically for magical auras. Immune to the Frightened condition. Advantage on death saving throws — the land itself is reluctant to release something so deeply part of it.',active:'Horn Resonance Burst once per combat as an action — a 30ft radius pulse ending all ongoing magical effects not of your own casting, forcing DC 15 concentration checks on all casters in range, and permanently churning ground into difficult terrain for the rest of the encounter. All three terrain effects available simultaneously each turn. Charge attacks deal triple damage dice. Advantage on all rolls in natural environments.',penalty:'Effects that specifically attempt to sever the ecological bond, rewrite sense of place, or separate the self from the environment have advantage against you. Standard Charm, Hold, and similar effects function normally. At instinct 5, when the Giga is also at instinct 3 or higher within 60ft, you gain advantage on all Horn Resonance abilities and your charge damage increases by one die size — two apex predators sharing a fully instinct-active ecosystem make each other more powerful.'}
+    ]
+  },
+  wyv:{
+    name:'Wyvern',cls:'Wizard',color:'var(--wyv)',
+    levelLabel:['human mind dominant','flight stabilising','paths instinctive','predator efficiency','apex adaptability','perfect integration'],
+    levels:[
+      {passive:'Full conscious control. Flight and breath weapon available but require active mental overhead. The mechanical skeleton hums at a frequency just below the threshold of meaning.',active:null,penalty:'Ground movement speed is half your flight speed. Enclosed spaces without a visible exit upward impose disadvantage on Concentration checks.'},
+      {passive:'Flight no longer requires active concentration overhead. Staying airborne is now as unconscious as standing upright was before.',active:'Advantage on Initiative rolls. Advantage on all aerial manoeuvre checks.',penalty:'When knocked prone from flight or forcibly grounded, Con save DC 11 or be disoriented until end of next turn with disadvantage on all rolls.'},
+      {passive:'Always know exact wind direction, speed, and thermal locations in the current environment. Advantage on aerial navigation and weather reading checks.',active:'Advantage on attacks made while diving from height. Breath weapon gains +10ft range permanently.',penalty:'Another flying creature within 60ft not currently engaged in combat triggers territorial instinct. Disadvantage on attacks against ground targets while an unengaged flying creature is within that radius.'},
+      {passive:'The mechanical skeleton conducts magic rather than merely containing it. Advantage on Arcana checks. Spell attack rolls made from 20ft altitude or higher gain +2 to hit.',active:'Breath weapon can be used freely once per turn without expending any resource. Dive and breath can be combined into a single action.',penalty:'Each round spent on the ground beyond the first two, take a cumulative -1 to all rolls to a maximum of -4. Resets completely and immediately upon returning to flight.'},
+      {passive:'For every 20ft of altitude above a target, gain +1 to spell save DC up to a maximum of +3. Height is magical advantage now, not just positional.',active:'Choose breath shape — line, cone, or burst — freely at the moment of use. Advantage on all aerial attacks this turn.',penalty:'Disadvantage on any action taken to directly assist an ally — Help action, healing spells, buffs — if you have not yet attacked or used your breath weapon this combat.'},
+      {passive:'Advantage on all saving throws against magical effects. Immune to being knocked prone while airborne. The machine and the creature are one thing now.',active:'Breath weapon recharges immediately after use once per combat. All aerial attacks have advantage. Breath weapon DC +2.',penalty:'If the mechanical skeleton is specifically targeted or you take more than half your maximum HP in a single hit, the resonance destabilises. Disadvantage on all rolls and breath weapon unavailable until end of your next turn.'}
+    ]
+  }
+};
+
+const PACKS=[
+  {id:'gu',chips:[{k:'giga',l:'Giga'},{k:'utah',l:'Utah'}],condition:'Both act against the same target in the same round',effect:"The Giganotosaurus fixes all attention — something that massive moving with full intent toward a single target creates a gravity that is almost impossible to look away from. The Utahraptor reads that frozen moment perfectly and hits the exposed flank, the fraction of a second where the target's own instincts have betrayed it. Utahraptor's attack auto-crits on hit.",check:s=>s.giga>=1&&s.utah>=1},
+  {id:'wg',chips:[{k:'wyv',l:'Wyvern'},{k:'all',l:'+ any ground'}],condition:'Wyvern dives on a target already engaged by a ground creature',effect:"When a creature is already engaged on the ground, its attention is horizontal. An aerial attack breaks that model completely — the target must split threat awareness between two entirely different spatial planes simultaneously. Ground creature gains advantage on their next attack against that target.",check:s=>s.wyv>=1&&(s.giga>=1||s.utah>=1||s.carn>=1)},
+  {id:'all',chips:[{k:'all',l:'All four'}],condition:'All four act in the same initiative round at instinct 1+',effect:"There are moments in predator behaviour where a group stops being several individuals and becomes a single distributed organism. Every movement fits every other. Trigger a dramatic encounter shift: enemies may break morale, the environment reacts, something in the world changes. They became a true apex predator unit.",check:s=>s.giga>=1&&s.utah>=1&&s.carn>=1&&s.wyv>=1}
+];
+
+// ── STATE ──────────────────────────────────────────────────────
+let scores    = {giga:0,utah:0,carn:0,wyv:0};
+let logEntries= [];
+let expanded  = JSON.parse(localStorage.getItem('it_exp')    ||'{}');
+let rulesOpen = JSON.parse(localStorage.getItem('it_rules')  ||'false');
+let wyvCombatOpen = JSON.parse(localStorage.getItem('it_wyvcombat')||'false');
+let suppressWrite = false; // prevent feedback loops
+
+// ── FIREBASE LISTENERS ─────────────────────────────────────────
+scoresRef.on('value', snap => {
+  const data = snap.val();
+  if (!data) return;
+  suppressWrite = true;
+  scores = {...scores, ...data};
+  Object.keys(DATA).forEach(key => updateCard(key));
+  suppressWrite = false;
+});
+
+logRef.on('value', snap => {
+  const data = snap.val();
+  if (!data) return;
+  logEntries = Array.isArray(data) ? data : Object.values(data);
+  renderLog();
+});
+
+// ── SAVE ───────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('it_exp',       JSON.stringify(expanded));
+  localStorage.setItem('it_rules',     JSON.stringify(rulesOpen));
+  localStorage.setItem('it_wyvcombat', JSON.stringify(wyvCombatOpen));
+  if (!suppressWrite) {
+    scoresRef.set(scores);
+    logRef.set(logEntries.slice(0,40));
+  }
+  const dot = document.getElementById('save-dot');
+  dot.classList.add('show');
+  setTimeout(()=>dot.classList.remove('show'), 900);
+}
+
+// ── TOGGLES ────────────────────────────────────────────────────
+function toggleRules(){
+  rulesOpen=!rulesOpen;
+  document.getElementById('rules-body').classList.toggle('open',rulesOpen);
+  document.getElementById('rules-toggle').classList.toggle('open',rulesOpen);
+  save();
+}
+function toggleWyvCombat(){
+  wyvCombatOpen=!wyvCombatOpen;
+  document.getElementById('wyv-combat-body').classList.toggle('open',wyvCombatOpen);
+  document.getElementById('wyv-combat-toggle').classList.toggle('open',wyvCombatOpen);
+  save();
+}
+
+// ── RENDER HELPERS ─────────────────────────────────────────────
+function fi(dotCol,lblCol,label,text,dimmed){
+  return `<div class="feature-item${dimmed?' dimmed':''}"><div class="feature-dot" style="background:${dotCol}"></div><div><div class="feature-type" style="color:${lblCol}">${label}</div><div class="feature-desc">${text}</div></div></div>`;
+}
+
+function featureHtml(key,s){
+  const d=DATA[key]; let h='';
+  if(s===0){
+    const l=d.levels[0];
+    h+=fi('var(--muted2)','var(--muted)','passive',l.passive,false);
+    h+=fi('var(--muted2)','var(--muted2)','active','No active ability at level 0.',false);
+    h+=fi('var(--pen)','var(--pen)','penalty',l.penalty,false);
+    return h;
+  }
+  if(s>1){
+    h+=`<div class="section-label">retained passives</div>`;
+    for(let i=0;i<s;i++) h+=fi('var(--muted2)','var(--muted2)',`lvl ${i} passive`,DATA[key].levels[i].passive,true);
+    h+=`<hr class="hr-thin">`;
+  }
+  const cur=d.levels[s];
+  h+=`<div class="section-label">level ${s} — current</div>`;
+  h+=fi('var(--muted)','var(--muted)','passive',cur.passive,false);
+  if(cur.active) h+=fi(d.color,d.color,'active',cur.active,false);
+  h+=fi('var(--pen)','var(--pen)','penalty',cur.penalty,false);
+  return h;
+}
+
+function allLevelsHtml(key){
+  const d=DATA[key];
+  return d.levels.map((l,i)=>{
+    const cur=i===scores[key];
+    const c=cur?d.color:'var(--muted2)';
+    return `<div class="level-row${cur?' cur':''}">
+      <div class="level-row-hd">
+        <div class="level-num" style="color:${c}">${i}</div>
+        <div class="level-name-lbl">${d.levelLabel[i]}</div>
+      </div>
+      <div class="level-detail">
+        <div class="ld-passive">${l.passive}</div>
+        ${l.active?`<div class="ld-active" style="color:${cur?d.color:'#7a7060'}">&#8627; Active: ${l.active}</div>`:''}
+        <div class="ld-penalty" style="color:${cur?'#c07070':'#6a4040'}">&#8627; Penalty: ${l.penalty}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── BUILD GRID ─────────────────────────────────────────────────
+function buildGrid(){
+  document.getElementById('grid').innerHTML=Object.entries(DATA).map(([key,d])=>{
+    const s=scores[key];
+    return `<div class="card" data-key="${key}" id="card-${key}">
+      <div class="card-stripe"></div>
+      <div class="card-body">
+        <div class="card-header">
+          <div><div class="creature-name">${d.name}</div><div class="class-tag">${d.cls}</div></div>
+          <span class="score-pill" id="pill-${key}">${s}/5</span>
+        </div>
+        <div class="score-row">
+          <div class="score-big" id="num-${key}" style="color:${s>0?d.color:'var(--muted)'}">${s}</div>
+          <div class="score-of">/5</div>
+          <div class="btns">
+            <button class="btn" onclick="change('${key}',1)" id="plus-${key}" ${s>=5?'disabled':''}>+</button>
+            <button class="btn" onclick="change('${key}',-1)" id="minus-${key}" ${s<=0?'disabled':''}>&minus;</button>
+          </div>
+        </div>
+        <div class="pips" id="pips-${key}">${[1,2,3,4,5].map(n=>`<div class="pip" style="${s>=n?`background:${d.color}`:''}"></div>`).join('')}</div>
+        <div class="level-label" id="llabel-${key}" style="color:${s>0?d.color:'var(--muted)'}">${d.levelLabel[s]}</div>
+        <div class="features-box" id="feat-${key}">
+          <div class="features-box-title">Level ${s} — active features</div>
+          ${featureHtml(key,s)}
+        </div>
+        <button class="expand-toggle" onclick="toggleExp('${key}')" id="tog-${key}">${expanded[key]?'&#9650; hide all levels':'&#9660; show all levels'}</button>
+        <div class="expand-panel ${expanded[key]?'open':''}" id="panel-${key}">${allLevelsHtml(key)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateCard(key){
+  const d=DATA[key],s=scores[key];
+  document.getElementById(`num-${key}`).textContent=s;
+  document.getElementById(`num-${key}`).style.color=s>0?d.color:'var(--muted)';
+  document.getElementById(`pill-${key}`).textContent=`${s}/5`;
+  document.getElementById(`llabel-${key}`).textContent=d.levelLabel[s];
+  document.getElementById(`llabel-${key}`).style.color=s>0?d.color:'var(--muted)';
+  document.getElementById(`plus-${key}`).disabled=s>=5;
+  document.getElementById(`minus-${key}`).disabled=s<=0;
+  document.getElementById(`pips-${key}`).querySelectorAll('.pip').forEach((p,i)=>{p.style.background=s>=i+1?d.color:'';});
+  document.getElementById(`feat-${key}`).innerHTML=`<div class="features-box-title">Level ${s} — active features</div>${featureHtml(key,s)}`;
+  const panel=document.getElementById(`panel-${key}`);
+  if(panel) panel.innerHTML=allLevelsHtml(key);
+  updatePack();
+}
+
+function toggleExp(key){
+  expanded[key]=!expanded[key];
+  document.getElementById(`panel-${key}`).classList.toggle('open',expanded[key]);
+  document.getElementById(`tog-${key}`).innerHTML=expanded[key]?'&#9650; hide all levels':'&#9660; show all levels';
+  save();
+}
+
+function updatePack(){
+  document.getElementById('pack-bonuses').innerHTML=PACKS.map(pb=>{
+    const on=pb.check(scores);
+    return `<div class="pack-bonus ${on?'active':''}">
+      <div class="pack-chips">${pb.chips.map(c=>`<span class="chip ${c.k}">${c.l}</span>`).join('')}</div>
+      <div class="pack-info"><div class="pack-condition">${pb.condition}</div><div class="pack-effect">${pb.effect}</div></div>
+      <div class="active-badge">active</div>
+    </div>`;
+  }).join('');
+}
+
+// ── CHANGE ─────────────────────────────────────────────────────
+function change(key,delta){
+  const prev=scores[key];
+  scores[key]=Math.max(0,Math.min(5,scores[key]+delta));
+  if(scores[key]===prev) return;
+  const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  logEntries.unshift({time:now,name:DATA[key].name,from:prev,to:scores[key],label:DATA[key].levelLabel[scores[key]]});
+  if(logEntries.length>40) logEntries.pop();
+  updateCard(key);
+  renderLog();
+  save();
+}
+
+function renderLog(){
+  const el=document.getElementById('log');
+  if(!logEntries.length){el.innerHTML='<p class="empty-log">No changes yet.</p>';return;}
+  el.innerHTML=logEntries.map(e=>`<div class="log-entry"><span class="log-time">${e.time}</span><span class="log-name">${e.name}</span><span class="log-change">${e.from} &#8594; ${e.to} — ${e.label}</span></div>`).join('');
+}
+
+function clearLog(){
+  logEntries=[];
+  renderLog();
+  logRef.set([]);
+  save();
+}
+
+function resetAll(){
+  if(!confirm('Reset all instinct scores to 0?')) return;
+  Object.keys(scores).forEach(k=>scores[k]=0);
+  const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  logEntries.unshift({time:now,name:'All',from:'--',to:0,label:'reset to 0'});
+  buildGrid(); renderLog(); save();
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+if(rulesOpen){
+  document.getElementById('rules-body').classList.add('open');
+  document.getElementById('rules-toggle').classList.add('open');
+}
+if(wyvCombatOpen){
+  document.getElementById('wyv-combat-body').classList.add('open');
+  document.getElementById('wyv-combat-toggle').classList.add('open');
+}
+buildGrid();
+renderLog();
+updatePack();
+</script>
+</body>
+</html>
